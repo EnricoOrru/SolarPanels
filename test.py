@@ -102,6 +102,8 @@ def calculateAltitude(input_date, location):
     altitude = 90 - calculateElevation(input_date, location)
     return altitude
 
+def help():
+    pass
 
 
     # def calculateAltitude(input_date, location):
