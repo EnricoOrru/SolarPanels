@@ -1,7 +1,7 @@
 import math
 import datetime as dt
 from datetime import datetime, date, timedelta
-
+import Pysolar
 import requests
 from timezonefinder import TimezoneFinder
 import pytz
@@ -98,16 +98,8 @@ def calculateElevation(input_date, location):
         El = -1 * El + math.pi
     return El
 
-def calculateAltitude(input_date, location):
-    altitude = 90 - calculateElevation(input_date, location)
-    return altitude
 
-def help():
-    pass
+def calculate_sun_altitude(day: dt.datetime, location):
+    Pysolar.
 
-
-    # def calculateAltitude(input_date, location):
-    #
-    #     hour_ang = sidereal - rasc
-    #     elevation = asin(sin(decl) * sin(rlat) + cos(decl) *
-    #                      cos(rlat) * cos(hour_ang))
+    return UT

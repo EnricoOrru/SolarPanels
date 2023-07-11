@@ -26,8 +26,7 @@ class MyTestCase(unittest.TestCase):
                                                                                   "Fiorano Modenese, Italy")))
 
     def test_sunAngle2(self):
-        self.assertEqual(0, math.degrees(test.calculateElevation(datetime.datetime(2023,6,17,13),
-                                                                                  "Forfar, Scotland")))
+        self.assertEqual(0, test.calculate_sun_altitude(datetime.datetime(2023,6,17,13),(56.6431, -2.8901)))
 
     def test_integral(self):
         self.assertEqual(2, main2.calculateIntegral(lambda x: math.sin(x),0,math.pi))
