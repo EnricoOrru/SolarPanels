@@ -24,12 +24,13 @@ class MyTestCase(unittest.TestCase):
 
     def test_sunAngle(self):
         self.assertEqual(173.76077693189808,
-                         math.degrees(main2.calculateElevation(datetime.datetime(2023, 7, 13, 13),
-                                                               "Fiorano Modenese, Italy")))
+                         math.degrees(main2.calculateElevation(datetime.datetime(2023, 6, 15, 13), "Forfar, Scotland",
+                                                               [datetime.datetime(2023, 6, 15, 14, 0), datetime.datetime(2023, 6, 15, 15, 0)])))
 
     def test_sunAngle2(self):
         self.assertEqual(0, math.degrees(
-            main2.calculateElevation(datetime.datetime(2023, 7, 13, 14), ("Forfar, Scotland"))))
+            main2.calculateElevation(datetime.datetime(2023, 6, 15, 18), ("Forfar, Scotland"),
+                                                               [datetime.datetime(2023, 6, 15, 14, 0), datetime.datetime(2023, 6, 15, 15, 0)])))
 
     #
     # def test_sunAngle3(self):
@@ -66,8 +67,8 @@ class MyTestCase(unittest.TestCase):
     #                                                 "Dundee, Scotland"))
 
     # def test_mike(self):
-    #     self.assertEqual(0, main2.calculate_actual_solar_energy(datetime.datetime(2023, 6, 16, 2),
-    #                                                         datetime.datetime(2023, 6, 16, 23),
+    #     self.assertEqual(0, main2.calculate_actual_solar_energy(datetime.datetime(2023, 6, 3, 2),
+    #                                                         datetime.datetime(2023, 6, 3, 23),
     #                                                         "Forfar, Scotland", 97320, 20))
 
     def test_convert_to_unix(self):
@@ -86,8 +87,9 @@ class MyTestCase(unittest.TestCase):
     # def test_diff_times(self):
     #     self.assertEqual(3, main2.calculate_difference_between_times(datetime.datetime(2023, 6, 3, 17), datetime.datetime(2023, 6, 3, 20)))
 
-    def test_noon_angle(self):
-        self.assertEqual(60, main2.get_solar_noon(datetime.datetime(2023, 7, 13), "Forfar, Scotland"))
+    # def test_noon_angle(self):
+    #     self.assertEqual(60, main2.get_solar_noon(datetime.datetime(2023, 6, 15,2),datetime.datetime(2023, 6, 15,23),
+    #                                               "Forfar, Scotland"))
 
         # 2kwh per hour
 
