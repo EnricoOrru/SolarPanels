@@ -1,12 +1,18 @@
 import math
 import datetime as dt
 from datetime import datetime, date, timedelta
-import Pysolar
+import pysolar.solar as pysolar
+#import suncalc
+#import sunposition
+import astropy.coordinates as coord
+from astropy.time import Time
+import astropy.units as u
 import requests
 from timezonefinder import TimezoneFinder
 import pytz
 import scipy.integrate as integrate
 from geopy import Nominatim
+import main2
 
 
 def calculateLatitude(location):
@@ -92,14 +98,44 @@ def calculateElevation(input_date, location):
     El = math.asin((math.sin(declination) * math.sin(latitude)) +
                    (math.cos(declination) * math.cos(latitude) * math.cos(HRA)))
 
-    El = math
+    # if El > (math.pi/2) - 0.001:
+    #     El = -1 * El + math.pi
 
-    if (input_date.time().hour > 12):
-        El = -1 * El + math.pi
     return El
 
 
-def calculate_sun_altitude(day: dt.datetime, location):
-    Pysolar.
+# def calculate_sun_altitude(input_date, location):
+#     latitude = calculateLatitude(location)
+#     longitude = calculateLongitude(location)
+#     timezone_string = main2.calculateTimezoneFromLocation(location)
+#     timezone = pytz.timezone(timezone_string)
+#     input_date = timezone.localize(input_date)
+#     altitude = pysolar.get_altitude(latitude, longitude, input_date)
+#
+#     return altitude
 
-    return UT
+
+def calculate_sun_altitude(input_date, location):
+    latitude = calculateLatitude(location)
+    longitude = calculateLongitude(location)
+    timezone_string = main2.calculateTimezoneFromLocation(location)
+    timezone = pytz.timezone(timezone_string)
+    input_date = timezone.localize(input_date)
+    loc = coord.EarthLocation(lon=longitude * u.deg, lat=latitude * u.deg)
+    time = Time(input_date)
+    altaz = coord.AltAz(location=loc, obstime=time)
+    sun = coord.get_sun(time)
+    altitude = sun.transform_to(altaz).alt.value
+
+    return altitude
+
+
+# def calculate_sun_altitude(input_date, location):
+#     latitude = calculateLatitude(location)
+#     longitude = calculateLongitude(location)
+#     timezone_string = main2.calculateTimezoneFromLocation(location)
+#     timezone = pytz.timezone(timezone_string)
+#     input_date = timezone.localize(input_date)
+#     altitude = suncalc.get_position(input_date, longitude, latitude)
+#
+#     return altitude
