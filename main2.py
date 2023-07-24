@@ -9,10 +9,124 @@ import scipy.integrate as integrate
 from geopy import Nominatim
 
 
-# def calculateUTC(timezone, date: datetime):
-# def calculate_unixTS(date: datetime):
-# unix_timestamp = (datetime.now() - datetime(1970, 1, 1)).total_seconds()
-import test
+def calculate_actual_solar_energy(initial_date: datetime, final_date: datetime, location, area_of_effect_cm2,
+                                  solar_panel_percentage, surface_tilt, surface_azimuth):
+    hour_difference = calculate_difference_between_times(initial_date, final_date)
+    list_of_cloudiness = callToWeatherAPI(initial_date, final_date, location)
+    final_date = replace_hour(final_date, initial_date.hour)
+    final_date = add_minutes_to_datetime(final_date, 30)
+    energy = 0
+    peak = get_solar_noon(initial_date, final_date, location)
+    for i in range(hour_difference * 2):
+        minuteEnergy = calculate_solar_energy_clouded(initial_date, final_date, location, area_of_effect_cm2,
+                                                      solar_panel_percentage, list_of_cloudiness[i], peak, surface_tilt,
+                                                      surface_azimuth)
+
+        energy = energy + min(1, minuteEnergy)
+        initial_date = add_minutes_to_datetime(initial_date, 30)
+        final_date = add_minutes_to_datetime(final_date, 30)
+    #energy -= 21
+    return energy
+
+
+def calculate_solar_energy_clouded(initial_date: datetime, final_date: datetime, location, area_of_effect_cm2,
+                                   solar_panel_percentage, cloudiness, peak, surface_tilt, surface_azimuth):
+    max_solar_energy = calculateDifferentialEnergy(initial_date, final_date, location,area_of_effect_cm2, peak,
+                                                   surface_tilt, surface_azimuth)
+    max_solar_energy_converted = convert_mj_to_kwh(max_solar_energy)
+    cloud_cover = 1 - (20 / 100)
+    solar_energy = max_solar_energy_converted * cloud_cover * (solar_panel_percentage / 100)
+    return solar_energy
+
+
+def calculateDifferentialEnergy(initial_date: datetime, final_date: datetime, location, area_of_effect_cm2, peak,
+                                surface_tilt, surface_azimuth):
+    latitude = calculateLatitude(location)
+    sC = calculateSolarConstant(latitude, initial_date)
+    initial_altitude = calculateElevation(initial_date, location, peak)
+    final_altitude = calculateElevation(final_date, location, peak)
+    elevation = calculate_support_elevation(initial_date, location)
+    cosine_angle = math.sin(math.radians(surface_tilt)) * math.sin(
+        elevation) + \
+                   math.cos(math.radians(surface_tilt)) * math.cos(
+        elevation) * \
+                   math.cos(
+                       math.radians(calculateSolarAzimuth(initial_date, latitude)) - math.radians(
+                           surface_azimuth))
+
+    if cosine_angle < 0:
+        return 0
+
+    # dE = sC * (3600 * (calculateTimeOfDay(initial_date, calculateLatitude(location)) / math.pi)) * \
+    #      calculateIntegral(lambda A: math.sin(A), initial_altitude,
+    #                            final_altitude) * area_of_effect_cm2 * cosine_angle
+
+    dE = sC * (3600 * 0.5) * area_of_effect_cm2 * cosine_angle
+
+    return dE
+
+
+# def calculateDifferentialEnergy(initial_date: datetime, final_date: datetime, location, area_of_effect_cm2, peak):
+#     sC = calculateSolarConstant(calculateLatitude(location), initial_date)
+#     initial_altitude = calculateElevation(initial_date, location, peak)
+#     final_altitude = calculateElevation(final_date, location, peak)
+#
+#     dE = sC * (3600 * (calculateTimeOfDay(initial_date, calculateLatitude(location)) / math.pi)) * \
+#          calculateIntegral(lambda A: math.sin(A), initial_altitude, final_altitude) * area_of_effect_cm2
+#     return dE
+
+
+def calculateElevation(input_date, location, peak):
+    declination = calculateDeclinationAngle(input_date)
+    latitude = calculateLatitude(location)
+    latitude = math.radians(latitude)
+    HRA = calculateHourAngle(input_date, location)
+    HRA = math.radians(HRA)
+
+    El = math.asin((math.sin(declination) * math.sin(latitude)) +
+                   (math.cos(declination) * math.cos(latitude) * math.cos(HRA)))
+
+    if input_date.hour > peak[0].hour:
+        angleToAdd = calculate_support_elevation(peak[0], location)
+        El = El + angleToAdd
+    return El
+
+
+def get_solar_noon(initial_date, final_date, location):
+    diff = calculate_difference_between_times(initial_date, final_date)
+    final_date = replace_hour(final_date, initial_date.hour)
+    final_date = add_minutes_to_datetime(final_date, 30)
+    max = 0
+    max_inital_date = initial_date
+    max_final_date = final_date
+    for i in range(diff * 2):
+        el = calculate_support_elevation(initial_date, location)
+
+        if max < el:
+            max = el
+            max_inital_date = initial_date
+            max_final_date = final_date
+
+        initial_date = add_minutes_to_datetime(initial_date, 30)
+        final_date = add_minutes_to_datetime(final_date, 30)
+    return [max_inital_date, max_final_date]
+
+
+# def get_solar_noon(input_date, location):
+#     observer = ephem.Observer()
+#     latitude = calculateLatitude(location)
+#     longitude = calculateLongitude(location)
+#     observer.lat = str(latitude)
+#     observer.lon = str(longitude)
+#     observer.elevation = 0
+#
+#     sun = ephem.Sun()
+#     observer.date = input_date
+#
+#     solar_noon = observer.next_transit(sun).datetime()
+#     local_timezone = pytz.timezone(calculateTimezoneFromLocation(location))
+#
+#     return solar_noon.astimezone(local_timezone).strftime('%Y-%m-%d %H:%M:%S')
 
 
 def calculate_sun_position(date):
@@ -68,7 +182,7 @@ def calculateNumberOfDaysSinceStartOfYear(input_date: datetime):
     return days
 
 
-def create_date_from_string(string,format):
+def create_date_from_string(string, format):
     date = dt.datetime.strptime(string, format)
     return date
 
@@ -141,24 +255,8 @@ def calculate_support_elevation(peak_time, location):
     HRA = math.radians(HRA)
 
     peakEl = math.asin((math.sin(declination) * math.sin(latitude)) +
-                   (math.cos(declination) * math.cos(latitude) * math.cos(HRA)))
+                       (math.cos(declination) * math.cos(latitude) * math.cos(HRA)))
     return peakEl
-
-
-def calculateElevation(input_date, location, peak):
-    declination = calculateDeclinationAngle(input_date)
-    latitude = calculateLatitude(location)
-    latitude = math.radians(latitude)
-    HRA = calculateHourAngle(input_date, location)
-    HRA = math.radians(HRA)
-
-    El = math.asin((math.sin(declination) * math.sin(latitude)) +
-                   (math.cos(declination) * math.cos(latitude) * math.cos(HRA)))
-
-    if input_date.hour > peak[0].hour:
-        angleToAdd = calculate_support_elevation(peak[0], location)
-        El = El + angleToAdd
-    return El
 
 
 def calculateTimeOfDay(input_date, latitude):
@@ -183,29 +281,57 @@ def convert_to_unix_time(date: datetime, location):
     return unix_time
 
 
+# def callToWeatherAPI(initial_date: datetime, final_date: datetime, location):
+#     inital_time = str(int(convert_to_unix_time(initial_date, location)))
+#     final_time = str(int(convert_to_unix_time(final_date, location)))
+#     latitude = str(round(calculateLatitude(location), 5))
+#     longitude = str(round(calculateLongitude(location), 5))
+#     url = 'https://history.openweathermap.org/data/2.5/history/city?lat=' + latitude + '&lon=' + longitude \
+#           + '&type=hour&start=' + inital_time + '&end=' + final_time + '&appid=eb1b77df1c8a2ea0a4b2b4aea35e80e5'
+#     response = requests.get(url)
+#
+#     if response.status_code == 200:
+#         data = response.json()
+#         list_of_cloudiness = []
+#         for data_point in data['list']:
+#             list_of_cloudiness.append(data_point['clouds']['all'])
+#         # average_cloudiness = sum(list_of_cloudiness) / len(list_of_cloudiness)
+#         list_of_cloudiness = duplicate_list(list_of_cloudiness)
+#         return list_of_cloudiness
+#     else:
+#         print('Error:', response.status_code)
+
+
 def callToWeatherAPI(initial_date: datetime, final_date: datetime, location):
     inital_time = str(int(convert_to_unix_time(initial_date, location)))
     final_time = str(int(convert_to_unix_time(final_date, location)))
-    latitude = str(round(calculateLatitude(location), 2))
-    longitude = str(round(calculateLongitude(location), 2))
-    url = 'https://history.openweathermap.org/data/2.5/history/city?lat=' + latitude + '&lon=' + longitude \
-          + '&type=hour&start=' + inital_time + '&end=' + final_time +'&appid=eb1b77df1c8a2ea0a4b2b4aea35e80e5'
+    latitude = str(round(calculateLatitude(location), 5))
+    longitude = str(round(calculateLongitude(location), 5))
+    url = 'https://api.weatherbit.io/v2.0/history/hourly?lat=56.64482956171486&lon=-2.888728934975756&start_date=2023-05-24:01&end_date=2023-05-25:01&tz=local&key=692afbc7b1184804b4598a5998ddf629'
     response = requests.get(url)
 
     if response.status_code == 200:
         data = response.json()
         list_of_cloudiness = []
-        for data_point in data['list']:
-            list_of_cloudiness.append(data_point['clouds']['all'])
-        #average_cloudiness = sum(list_of_cloudiness) / len(list_of_cloudiness)
+        for entry in data['data']:
+            clouds = entry['clouds']
+            list_of_cloudiness.append(clouds)
+        list_of_cloudiness = duplicate_list(list_of_cloudiness)
         return list_of_cloudiness
     else:
         print('Error:', response.status_code)
 
 
+
+def duplicate_list(list):
+    list_duplicated = [value for value in list for _ in range(2)]
+    return list_duplicated
+
+
 def convert_mj_to_kwh(mj):
     joules = mj / 1000
     kwh = joules / 3600000
+    kwh *= 2
     return kwh
 
 
@@ -222,12 +348,17 @@ def convert_mj_to_kwh(mj):
 def calculate_difference_between_times(initial_date: datetime, final_date: datetime):
     initial_hour = initial_date.hour
     final_hour = final_date.hour
-    hour_difference = final_hour-initial_hour
+    hour_difference = final_hour - initial_hour
     return hour_difference
 
 
-def add_hours_to_datetime(dateToChange: datetime, hoursToAdd):
-    dateToReturn = dateToChange + datetime.timedelta(hours=hoursToAdd)
+# def add_hours_to_datetime(dateToChange: datetime, hoursToAdd):
+#     dateToReturn = dateToChange + dt.timedelta(hours=hoursToAdd)
+#     return dateToReturn
+
+
+def add_minutes_to_datetime(dateToChange: datetime, minutesToAdd):
+    dateToReturn = dateToChange + dt.timedelta(minutes=minutesToAdd)
     return dateToReturn
 
 
@@ -242,6 +373,7 @@ def replace_hour(dateToChange: datetime, hourToSwap):
 #     altitude_average = (initial_altitude + final_altitude) / 2
 #     return altitude_average
 
+
 def calculate_average_altitude(initial_date: datetime, final_date: datetime, location):
     initial_altitude = calculateElevation(initial_date, location)
     final_altitude = calculateElevation(final_date, location)
@@ -250,78 +382,11 @@ def calculate_average_altitude(initial_date: datetime, final_date: datetime, loc
     return math.atan2(y, x)
 
 
-def get_solar_noon(initial_date, final_date, location):
-    diff = calculate_difference_between_times(initial_date,final_date)
-    final_date = replace_hour(final_date, addHours(initial_date, 1).hour)
-    max = 0
-    max_inital_date = initial_date
-    max_final_date = final_date
-    for i in range(diff):
-        el = calculate_support_elevation(initial_date, location)
+def calculateSolarAzimuth(date: datetime, latitude):
+    obs = ephem.Observer()
+    obs.lat = str(latitude)
+    sun = ephem.Sun()
+    sun.compute(obs)
+    azimuth = math.degrees(sun.az)
 
-        if max < el:
-            max = el
-            max_inital_date = initial_date
-            max_final_date = final_date
-
-
-        initial_date = addHours(initial_date, 1)
-        final_date = addHours(final_date, 1)
-    return [max_inital_date, max_final_date]
-
-
-
-
-
-
-# def get_solar_noon(input_date, location):
-#     observer = ephem.Observer()
-#     latitude = calculateLatitude(location)
-#     longitude = calculateLongitude(location)
-#     observer.lat = str(latitude)
-#     observer.lon = str(longitude)
-#     observer.elevation = 0
-#
-#     sun = ephem.Sun()
-#     observer.date = input_date
-#
-#     solar_noon = observer.next_transit(sun).datetime()
-#     local_timezone = pytz.timezone(calculateTimezoneFromLocation(location))
-#
-#     return solar_noon.astimezone(local_timezone).strftime('%Y-%m-%d %H:%M:%S')
-
-
-def calculate_solar_energy_clouded(initial_date: datetime, final_date: datetime, location, area_of_effect_cm2, solar_panel_percentage, cloudiness, peak):
-    max_solar_energy = calculateDifferentialEnergy(initial_date, final_date, location, area_of_effect_cm2, peak)
-    max_solar_energy_converted = convert_mj_to_kwh(max_solar_energy)
-    cloud_cover = 1 - (cloudiness / 100)
-    solar_energy = max_solar_energy_converted * cloud_cover * (solar_panel_percentage/100)
-    return solar_energy
-
-
-def calculateDifferentialEnergy(initial_date: datetime, final_date: datetime, location, area_of_effect_cm2, peak):
-    sC = calculateSolarConstant(calculateLatitude(location), initial_date)
-    initial_altitude = calculateElevation(initial_date, location, peak)
-    final_altitude = calculateElevation(final_date, location, peak)
-
-    dE = sC * (3600 * (calculateTimeOfDay(initial_date, calculateLatitude(location)) / math.pi)) * \
-         abs(calculateIntegral(lambda A: math.sin(A), initial_altitude, final_altitude)) * area_of_effect_cm2
-    return dE
-
-
-def calculate_actual_solar_energy(initial_date: datetime, final_date: datetime, location, area_of_effect_cm2, solar_panel_percentage):
-    hour_difference = calculate_difference_between_times(initial_date, final_date)
-    list_of_cloudiness = callToWeatherAPI(initial_date, final_date, location)
-    final_date = replace_hour(final_date, addHours(initial_date, 1).hour)
-    energy = 0
-    peak = get_solar_noon(initial_date, final_date, location)
-    for i in range(hour_difference):
-        hourlyEnergy = calculate_solar_energy_clouded(initial_date, final_date, location, area_of_effect_cm2,
-                                                      solar_panel_percentage, list_of_cloudiness[i], peak)
-        if hourlyEnergy >= 2.0:
-            energy = energy + 2.0
-        else:
-            energy = energy + hourlyEnergy
-        initial_date = addHours(initial_date, 1)
-        final_date = addHours(final_date, 1)
-    return energy
+    return azimuth
