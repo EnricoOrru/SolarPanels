@@ -48,7 +48,7 @@ def set_up_system():
 
 def set_up_modelchain(system, location):
     #The system rapresents the PV system and the location the physical location of our system on the planet
-    modelchain = ModelChain(system, location)
+    modelchain = ModelChain(system, location, clearsky_model='ineichen')
     return modelchain
 
 
@@ -71,20 +71,18 @@ def main():
     location = get_location()
     system = set_up_system()
     modelchain = set_up_modelchain(system, location)
-    energy = calculate_actual_solar_energy(dt.datetime(2023, 5, 24, 0), dt.datetime(2023, 5, 24, 23), modelchain)
+    energy, list = calculate_actual_solar_energy(dt.datetime(2023, 5, 24, 0), dt.datetime(2023, 5, 25, 0), modelchain)
     # ghi = global horizontal irradiance which is the total irradiance
     # dni = direct normal irradiance which is the energy that directly hits the module we created
     # dhi = defuse horizontal irradiance which is the energy reflected from the clouds that hits the module
     # ac means the energy yield in watts behind the inverter(alternating current side)
 
-    # modelchain.run_model(set_up_clearsky(modelchain.location,set_up_timerange(modelchain.location,
-    #                                                                           dt.datetime(2022, 5, 24, 0),
-    #                                                                           dt.datetime(2022, 5, 25, 0))))
+    #modelchain.run_model(set_up_clearsky(modelchain.location,set_up_timerange(modelchain.location,dt.datetime(2022, 5, 24, 0), dt.datetime(2022, 5, 25, 0))))
     # modelchain.results.ac.plot(figsize=(16, 9))
     # plt.show()
     # 11184.0971737474
-    #total_energy_yield = modelchain.results.ac.sum()
-    return energy
+    #energy = modelchain.results.ac.sum()
+    return energy, list, len(list)
 
 
 def calculate_actual_solar_energy(initial_date, final_date, modelchain):
@@ -94,17 +92,25 @@ def calculate_actual_solar_energy(initial_date, final_date, modelchain):
     else:
         final_date = replace_day(final_date, initial_date.day)
         final_date = replace_hour(final_date, addHours(initial_date, 1).hour)
-    # final_date = dt.datetime(2023, 5, 24, 1)
     energy = 0
+    time_range = set_up_timerange(modelchain.location, initial_date, final_date)
+    clear_sky = set_up_clearsky(modelchain.location, time_range)
+    modelchain.run_model(clear_sky)
+    energy += modelchain.results.ac.values[0]
+    list = []
+    list.append(modelchain.results.ac.values[0])
+    initial_date = addHours(initial_date, 1)
+    final_date = addHours(final_date, 1)
     for i in range(hour_difference):
         time_range = set_up_timerange(modelchain.location, initial_date, final_date)
         clear_sky = set_up_clearsky(modelchain.location, time_range)
         modelchain.run_model(clear_sky)
-        energy += modelchain.results.ac.sum()
-
+        energy += modelchain.results.ac.values[0]
+        list.append(modelchain.results.ac.values[0])
         initial_date = addHours(initial_date, 1)
         final_date = addHours(final_date, 1)
-    return energy
+    return energy, list
+
 
 def calculate_difference_between_times(datetime1, datetime2):
     diff = datetime2 - datetime1
