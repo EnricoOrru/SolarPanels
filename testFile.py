@@ -6,6 +6,7 @@ from datetime import date
 import GPT
 import main2
 import test
+import OpenWeatherSolution
 
 
 class MyTestCase(unittest.TestCase):
@@ -138,8 +139,31 @@ class MyTestCase(unittest.TestCase):
     # def test_addHours2(self):
     #     self.assertEqual(24, GPT.calculate_difference_between_times(datetime.datetime(2023,5,24,0),datetime.datetime(2023,5,25,0)))
 
-    def test_maingpt(self):
-        self.assertEqual(0, GPT.main())
+      def test_maingpt(self):
+         self.assertEqual(0, GPT.main())
+
+      def test_check_days_difference(self):
+          self.assertEqual(-1, GPT.check_days_difference(datetime.datetime(2023,8,18,0), GPT.get_location()))
+      # def test_past_call(self):
+      #     self.assertEqual(0, GPT.callToWeatherAPIPast(datetime.datetime(2023, 7, 18, 0), datetime.datetime(2023, 7, 19, 0)))
+
+      # def test_api_future_call(self):
+      #     self.assertEqual(0, GPT.callToWeatherAPIFuture(datetime.datetime(2022, 8, 18, 0, 0)))
+      #
+      # def test_unix_to_utx(self):
+      #     self.assertEqual(0, GPT.trying(1692295200))
+
+      # def test_weatherAPI(self):
+      #    self.assertEqual(0, GPT.callToWeatherAPI(datetime.datetime(2023, 5, 12), datetime.datetime(2023, 5, 13)))
+
+    # def test_convertToUTC(self):
+    #     self.assertEqual(datetime.datetime(2023, 5, 13, 3), GPT.convert_to_utc(datetime.datetime(2023, 5, 13, 4, 0), "Europe/London"))
+
+     # def test_get_clouded(self):
+     #     self.assertEqual(25, GPT.get_dissipation_value(100))
+
+     # def test_create_location(self):
+     #     self.assertEqual(0, OpenWeatherSolution.create_location("Forfar, Scotland"))
 
 if __name__ == '__main__':
     unittest.main()
