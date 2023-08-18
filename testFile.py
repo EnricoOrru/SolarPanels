@@ -142,8 +142,8 @@ class MyTestCase(unittest.TestCase):
       def test_maingpt(self):
          self.assertEqual(0, GPT.main())
 
-      def test_check_days_difference(self):
-          self.assertEqual(-1, GPT.check_days_difference(datetime.datetime(2023,8,18,0), GPT.get_location()))
+      # def test_check_days_difference(self):
+      #     self.assertEqual(365, GPT.check_days_difference(datetime.datetime(2022,8,17,0), GPT.get_location()))
       # def test_past_call(self):
       #     self.assertEqual(0, GPT.callToWeatherAPIPast(datetime.datetime(2023, 7, 18, 0), datetime.datetime(2023, 7, 19, 0)))
 

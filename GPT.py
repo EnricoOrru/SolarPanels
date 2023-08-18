@@ -20,10 +20,12 @@ import time as t
 from timezonefinder import TimezoneFinder
 
 
-def get_location():
-    latitude = 56.652163
-    longitude = -2.907930
-    timezone = "Europe/London"
+def get_location(postcode):
+    latitude, longitude = get_lat_lng_from_postcode(postcode)
+    timezone = calculateTimezoneFromLocation(latitude, longitude)
+    # latitude = 56.652163
+    # longitude = -2.907930
+    # timezone = "Europe/London"
     location = Location(latitude, longitude, timezone)
     return location
 
@@ -50,7 +52,7 @@ def set_up_system():
                       module_parameters=module,
                       inverter_parameters=inverter,
                       temperature_model_parameters=temperature_parameters,
-                      modules_per_string=6,
+                      modules_per_string=3,
                       strings_per_inverter=1)
     return system
 
@@ -77,33 +79,50 @@ def set_up_clearsky(location, time_range):
 
 
 def main():
-    location = get_location()
+    location = get_location("DD12HF")
     system = set_up_system()
     modelchain = set_up_modelchain(system, location)
-    energy, list = calculate_actual_solar_energy(dt.datetime(2023, 8, 17, 0), dt.datetime(2023, 8, 18, 0), modelchain)
+    energy, list_of_production = calculate_actual_solar_energy(dt.datetime(2023, 8, 10, 0), dt.datetime(2023, 8, 11, 0), modelchain)
     # ghi = global horizontal irradiance which is the total irradiance
     # dni = direct normal irradiance which is the energy that directly hits the module we created
     # dhi = defuse horizontal irradiance which is the energy reflected from the clouds that hits the module
     # ac means the energy yield in watts behind the inverter(alternating current side)
-
     # modelchain.run_model(set_up_clearsky(modelchain.location,set_up_timerange(modelchain.location,dt.datetime(2023, 10, 5, 0), dt.datetime(2023, 10, 6, 0))))
     # modelchain.results.ac.plot(figsize=(16, 9))
     # plt.show()
     # energy = modelchain.results.ac.sum()
 
-    plot_graph(list, dt.datetime(2023, 5, 24, 0))
-    return energy
+
+    #fare priorità
+    list_of_production_origin = list_of_production
+
+    list_of_consumption_dishwasher = [1.92, 79.93, 307.88, 6.52, 6.1, 6.47, 7.17, 7.23, 7.68, 162.3, 285.72, 9.22]
+    list_of_consumption_tumbleweed = [1.92, 79.93, 307.88, 6.52, 6.1, 6.47, 7.17, 7.23, 7.68, 162.3, 285.72, 9.22]
+    list_of_consumption_washingmachine = [0, 1, 0.18, 13.05, 20.62, 18.12, 11.62, 11.88, 82.38, 358.22, 1, 0]
+
+    max_hour_dishwasher, list_of_production = calculate_optimal_time(list_of_consumption_dishwasher, list_of_production)
+    max_hour_tumbleweed, list_of_production = calculate_optimal_time(list_of_consumption_tumbleweed, list_of_production)
+    max_hour_washingmachine, list_of_production = calculate_optimal_time(list_of_consumption_washingmachine, list_of_production)
+
+    plot_graph(list_of_production_origin, list_of_consumption_dishwasher, list_of_consumption_washingmachine,
+               list_of_consumption_tumbleweed, "List of Production After Consumption", max_hour_dishwasher,
+               max_hour_washingmachine, max_hour_tumbleweed)
+    return list_of_production
 
 
 def calculate_actual_solar_energy(initial_date, final_date, modelchain):
     hour_difference = int(calculate_difference_between_times(initial_date, final_date))
-    if check_days_difference(initial_date, modelchain.location) >= -2 and check_days_difference(initial_date, modelchain.location) < 0:
+    list_of_cloudiness = []
+    if check_days_difference(initial_date, modelchain.location) >= -2 and check_days_difference(initial_date,
+                                                                                                modelchain.location) < 0:
         list_of_cloudiness = callToWeatherAPIFuture(initial_date)
-    else:
+    if check_days_difference(initial_date, modelchain.location) < 365 and len(list_of_cloudiness) == 0:
         list_of_cloudiness = callToWeatherAPIPast(initial_date, final_date)
 
-    if list_of_cloudiness == None:
-        return 0
+    if check_days_difference(initial_date, modelchain.location) == 0 or check_days_difference(initial_date,
+                                                                                              modelchain.location) < -2 or \
+            check_days_difference(initial_date, modelchain.location) >= 365:
+        return 0, 0
 
     if final_date.day == initial_date.day:
         final_date = replace_hour(final_date, addHours(initial_date, 1).hour)
@@ -175,7 +194,7 @@ def calculate_difference_between_times(datetime1, datetime2):
 
 
 def callToWeatherAPIPast(initial_date: datetime, final_date: datetime):
-    location = get_location()
+    location = get_location("DD12HF")
     inital_time = str(int(convert_to_unix_time(initial_date, location)))
     final_time = str(int(convert_to_unix_time(final_date, location)))
     latitude = str(round(location.latitude, 5))
@@ -193,11 +212,12 @@ def callToWeatherAPIPast(initial_date: datetime, final_date: datetime):
     else:
         print('Error:', response.status_code)
 
+
 def callToWeatherAPIFuture(desired_local_start_time):
-    location = get_location()
+    location = get_location("DD12HF")
     latitude = str(round(location.latitude, 5))
     longitude = str(round(location.longitude, 5))
-    url = "https://pro.openweathermap.org/data/2.5/forecast/hourly?lat="+ latitude +"&lon="+longitude+"&appid=eb1b77df1c8a2ea0a4b2b4aea35e80e5"
+    url = "https://pro.openweathermap.org/data/2.5/forecast/hourly?lat=" + latitude + "&lon=" + longitude + "&appid=eb1b77df1c8a2ea0a4b2b4aea35e80e5"
     response = requests.get(url)
 
     if response.status_code == 200:
@@ -207,7 +227,8 @@ def callToWeatherAPIFuture(desired_local_start_time):
         for time in unix_times:
             time_in_utc = unix_timestamp_to_utc(time)
             time_localized = convert_utc_to_timezone(time_in_utc, calculateTimezoneFromLocation(location))
-            if(time_localized.day == desired_local_start_time.day and time_localized.hour == desired_local_start_time.hour):
+            if (
+                    time_localized.day == desired_local_start_time.day and time_localized.hour == desired_local_start_time.hour):
                 desidered_time = time
 
         clouds_info = []
@@ -217,11 +238,17 @@ def callToWeatherAPIFuture(desired_local_start_time):
 
             if len(clouds_info) >= 24:
                 break
+        if len(clouds_info) == 0:
+            for entry in data['list']:
+                clouds_info.append(entry['clouds']['all'])
 
+                if len(clouds_info) >= 24:
+                    break
         return clouds_info
 
     else:
         print('Error:', response.status_code)
+
 
 def convert_to_unix_time(date: datetime, location):
     tz = location.tz
@@ -264,31 +291,45 @@ def convert_to_utc(dt, timezone_str):
     return utc_datetime
 
 
-def plot_graph(energy_values, start_date):
-    # plot the list of values
-    plt.plot(energy_values,
-             color='green',  # set the color to green
-             marker='o',  # use circle markers
-             linewidth=2)  # set the line width to 2
+def plot_graph(list_of_production, dishwasher, washingmachine, tumbleweed, title, max_hour_dishwasher, max_hour_washingmachine,
+               max_hour_tumbleweed):
+    hours = list(range(24))
+    plt.figure()
+    dishwasher = shrink_list_by_number_and_average(dishwasher)
+    washingmachine = shrink_list_by_number_and_average(washingmachine)
+    tumbleweed = shrink_list_by_number_and_average(tumbleweed)
+    dishwasher = [0]*(max_hour_dishwasher+1) + dishwasher + [0]*(23 - max_hour_dishwasher - len(dishwasher))
+    washingmachine = [0]*(max_hour_washingmachine+1) + washingmachine + [0]*(23 - max_hour_washingmachine - len(washingmachine))
+    tumbleweed = [0]*(max_hour_tumbleweed+1) + tumbleweed + [0]*(23 - max_hour_tumbleweed - len(tumbleweed))
+    plt.plot(hours, list_of_production, label='Curve Of Production')
+    plt.plot(hours, dishwasher, label='Curve Of Consumption Dishwasher')
+    plt.plot(hours, washingmachine, label='Curve Of Consumption Washing Maching')
+    plt.plot(hours, tumbleweed, label='Curve Of Consumption Tumbleweed')
 
-    # add labels and title
-    plt.xlabel('Hour')  # set the x-axis label
-    plt.ylabel('Energy (kWh)')  # set the y-axis label
-    plt.title('Energy Production during: ' + str(start_date))  # set the title
-    plt.xticks(np.arange(0, 24, 1))
+    plt.xlabel('Hours')
+    plt.ylabel('Watts')
+    plt.title(title)
 
-    # show the plot
+    plt.legend()
+    plt.xticks(hours)
+    plt.axvline(x=max_hour_tumbleweed, color='r', linestyle='--', label=f'Start Hour of Dishwasher: {max_hour_tumbleweed}')
+    plt.axvline(x=max_hour_dishwasher, color='orange', linestyle='--', label=f'Start Hour of Dishwasher: {max_hour_dishwasher}')
+    plt.axvline(x=max_hour_washingmachine, color='green', linestyle='--', label=f'Start Hour of Dishwasher: {max_hour_washingmachine}')
     plt.show()
-    return None
 
 
 def calculate_optimal_time(list_of_consumption, list_of_production):
-    indexes_of_remaining_energy = list()
+    indexes_of_remaining_energy = dict()
+    production_after_consumption_per_start_hour = dict()
     for startHour in range(0, 23):
         production_after_consumption = [x for x in list_of_production]
         for i in range(0, len(list_of_consumption), 6):
             production_after_consumption[int(i / 6) + startHour] -= mean(list_of_consumption[i:i + 6])
-        indexes_of_remaining_energy.append(sum(production_after_consumption))
+        indexes_of_remaining_energy[startHour] = production_after_consumption[startHour] + production_after_consumption[startHour+1]
+        production_after_consumption_per_start_hour[startHour] = production_after_consumption
+    max_key = max(indexes_of_remaining_energy, key=indexes_of_remaining_energy.get)
+
+    return max_key, production_after_consumption_per_start_hour[max_key]
 
 
 def check_if_date_is_today(date, location):
@@ -311,6 +352,7 @@ def check_days_difference(date, location):
     difference = current_datetime.date() - input_datetime_in_timezone.date()
     return difference.days
 
+
 def unix_timestamp_to_utc(unix_timestamp):
     utc_datetime = dt.datetime.utcfromtimestamp(unix_timestamp)
     return utc_datetime
@@ -324,8 +366,8 @@ def convert_utc_to_timezone(utc_datetime, target_timezone):
     return localized_datetime
 
 
-def calculateTimezoneFromLocation(location):
-    timezone = TimezoneFinder().timezone_at(lat=location.latitude, lng=location.longitude)
+def calculateTimezoneFromLocation(latitude, longitude):
+    timezone = TimezoneFinder().timezone_at(lat=latitude, lng=longitude)
     return timezone
 
 
@@ -339,3 +381,26 @@ def calculateLongitude(location):
     geolocator = Nominatim(user_agent="Myapp")
     location_info = geolocator.geocode(location)
     return location_info.longitude
+
+
+def get_lat_lng_from_postcode(postcode):
+    geolocator = Nominatim(user_agent="geoapi")
+
+    location = geolocator.geocode(postcode)
+    if location:
+        latitude = location.latitude
+        longitude = location.longitude
+        return latitude, longitude
+    else:
+        print("Location not found for the provided postal code.")
+        return None, None
+
+
+def shrink_list_by_number_and_average(list):
+
+    averages = []
+    for i in range(0, len(list), 6):
+        subset = list[i:i + 6]
+        avg = sum(subset) / len(subset)
+        averages.append(avg)
+    return averages
