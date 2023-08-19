@@ -79,7 +79,7 @@ def set_up_clearsky(location, time_range):
 
 
 def main():
-    location = get_location("DD12HF")
+    location = get_location(postcode)
     system = set_up_system()
     modelchain = set_up_modelchain(system, location)
     energy, list_of_production = calculate_actual_solar_energy(dt.datetime(2023, 8, 10, 0), dt.datetime(2023, 8, 11, 0), modelchain)
